@@ -132,11 +132,12 @@ def save_course(semester_name, course_name_var, course_credit_var, course_list_f
         messagebox.showerror("File Error", f"Error saving course: {e}")
         return
 
-    add_course_to_display(course_list_frame, semester_name, course_name, course_credit)
+    add_course_to_display(course_list_frame, semester_name, course_name, course_credit, total_credits)
     update_total_credits(total_credits, float(course_credit))
     course_name_var.set("")
     course_credit_var.set("0.5")
     messagebox.showinfo("Success", f"Course '{course_name}' added to {semester_name}!")
+
 
 # Function to load courses for a semester
 def load_courses(semester_name, course_list_frame, total_credits):
@@ -146,14 +147,15 @@ def load_courses(semester_name, course_list_frame, total_credits):
             reader = csv.reader(file)
             for row in reader:
                 if row and row[0] == semester_name:
-                    add_course_to_display(course_list_frame, row[0], row[1], row[2])
+                    add_course_to_display(course_list_frame, row[0], row[1], row[2], total_credits)
                     total += float(row[2])
     except FileNotFoundError:
         pass
     total_credits.set(f"{total:.1f}")
 
+
 # Function to add a course to the UI
-def add_course_to_display(course_list_frame, semester_name, course_name, course_credit):
+def add_course_to_display(course_list_frame, semester_name, course_name, course_credit, total_credits):
     frame = tk.Frame(course_list_frame, padx=5, pady=5)
     frame.pack(fill=tk.X, anchor="w")
 
@@ -161,9 +163,11 @@ def add_course_to_display(course_list_frame, semester_name, course_name, course_
     course_label.pack(side=tk.LEFT)
 
     delete_button = tk.Button(
-        frame, text="X", font=("Arial", 10), fg="red", command=lambda: delete_course(semester_name, course_name, course_credit, frame, total_credits)
+        frame, text="X", font=("Arial", 10), fg="red",
+        command=lambda: delete_course(semester_name, course_name, course_credit, frame, total_credits)
     )
     delete_button.pack(side=tk.RIGHT)
+
 
     open_button = tk.Button(
         frame, text="Open", font=("Arial", 10), command=lambda: open_course(semester_name, course_name)
