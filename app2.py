@@ -182,22 +182,39 @@ def update_total_credits(total_credits, credit_change):
 
 # Function to delete a course
 def delete_course(semester_name, course_name, course_credit, frame, total_credits):
-    updated_rows = []
+    # Update courses.csv by removing the course
+    updated_courses = []
     try:
         with open(COURSES_FILE, mode="r") as file:
             reader = csv.reader(file)
-            updated_rows = [row for row in reader if not (row and row[0] == semester_name and row[1] == course_name)]
+            updated_courses = [row for row in reader if not (row and row[0] == semester_name and row[1] == course_name)]
     except FileNotFoundError:
         messagebox.showerror("File Error", "Courses file not found.")
         return
 
     with open(COURSES_FILE, mode="w", newline="") as file:
         writer = csv.writer(file)
-        writer.writerows(updated_rows)
+        writer.writerows(updated_courses)
 
+    # Update grades.csv by removing syllabus items related to the course
+    updated_grades = []
+    try:
+        with open(GRADES_FILE, mode="r") as file:
+            reader = csv.reader(file)
+            updated_grades = [row for row in reader if not (row and row[0] == semester_name and row[1] == course_name)]
+    except FileNotFoundError:
+        messagebox.showerror("File Error", "Grades file not found.")
+        return
+
+    with open(GRADES_FILE, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerows(updated_grades)
+
+    # Update UI
     frame.destroy()
     update_total_credits(total_credits, -float(course_credit))
-    messagebox.showinfo("Deleted", f"Course '{course_name}' has been deleted.")
+    messagebox.showinfo("Deleted", f"Course '{course_name}' and its syllabus items have been deleted.")
+
 
 # Function to open a course (stub for further details)
 def open_course(semester_name, course_name):
@@ -205,31 +222,50 @@ def open_course(semester_name, course_name):
 
 # Function to delete a semester
 def delete_semester(semester_name, frame):
-    updated_rows = []
+    # Remove the semester from the semesters.csv file
+    updated_semesters = []
     try:
         with open(SEMESTER_FILE, mode="r") as file:
             reader = csv.reader(file)
-            updated_rows = [row for row in reader if row and row[0] != semester_name]
+            updated_semesters = [row for row in reader if row and row[0] != semester_name]
     except FileNotFoundError:
-        messagebox.showerror("File Error", "CSV file not found.")
+        messagebox.showerror("File Error", "Semesters file not found.")
         return
 
     with open(SEMESTER_FILE, mode="w", newline="") as file:
         writer = csv.writer(file)
-        writer.writerows(updated_rows)
+        writer.writerows(updated_semesters)
 
+    # Remove all courses related to the semester from courses.csv
+    updated_courses = []
     try:
         with open(COURSES_FILE, mode="r") as file:
             reader = csv.reader(file)
-            updated_courses = [row for row in reader if row[0] != semester_name]
-        with open(COURSES_FILE, mode="w", newline="") as file:
-            writer = csv.writer(file)
-            writer.writerows(updated_courses)
+            updated_courses = [row for row in reader if row and row[0] != semester_name]
     except FileNotFoundError:
         pass
 
+    with open(COURSES_FILE, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerows(updated_courses)
+
+    # Remove all grades related to the semester from grades.csv
+    updated_grades = []
+    try:
+        with open(GRADES_FILE, mode="r") as file:
+            reader = csv.reader(file)
+            updated_grades = [row for row in reader if row and row[0] != semester_name]
+    except FileNotFoundError:
+        pass
+
+    with open(GRADES_FILE, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerows(updated_grades)
+
+    # Update the UI
     frame.destroy()
-    messagebox.showinfo("Deleted", f"Semester '{semester_name}' and its courses have been deleted.")
+    messagebox.showinfo("Deleted", f"Semester '{semester_name}', its courses, and syllabus items have been deleted.")
+
 
 # Load semesters on startup
 def load_semesters():
@@ -293,26 +329,22 @@ def open_course(semester_name, course_name):
     syllabus_item_name_var = tk.StringVar()
     syllabus_item_weight_var = tk.StringVar()
 
-    # Function to save a new syllabus item
-    def save_syllabus_item():
-        syllabus_name = syllabus_item_name_var.get().strip()
-        syllabus_weight = syllabus_item_weight_var.get().strip()
+    current_grade_var = tk.StringVar(value="N/A")  # Current grade variable
+    total_weight_var = tk.StringVar(value="0%")   # Total weight variable
 
-        if not syllabus_name or not syllabus_weight.isdigit():
-            messagebox.showerror("Input Error", "Please provide valid inputs.")
-            return
-
+    # Function to calculate total weight
+    def calculate_total_weight():
+        total_weight = 0
         try:
-            with open(GRADES_FILE, mode="a", newline="") as file:
-                writer = csv.writer(file)
-                writer.writerow([semester_name, course_name, syllabus_name, syllabus_weight, ""])  # No grade initially
-        except Exception as e:
-            messagebox.showerror("File Error", f"Error saving syllabus item: {e}")
-            return
+            with open(GRADES_FILE, mode="r") as file:
+                reader = csv.reader(file)
+                for row in reader:
+                    if row[0] == semester_name and row[1] == course_name:
+                        total_weight += int(row[3])  # Add weight of each syllabus item
+        except FileNotFoundError:
+            pass
 
-        add_syllabus_item_to_display(syllabus_list_frame, semester_name, course_name, syllabus_name, syllabus_weight, "")
-        syllabus_item_name_var.set("")
-        syllabus_item_weight_var.set("")
+        total_weight_var.set(f"{total_weight}%")  # Update the total weight display
 
     # Function to delete a syllabus item
     def delete_syllabus_item(semester, course, syllabus_name, frame):
@@ -330,9 +362,10 @@ def open_course(semester_name, course_name):
             writer.writerows(updated_rows)
 
         frame.destroy()
+        calculate_total_weight()  # Update total weight after deletion
         messagebox.showinfo("Deleted", f"Syllabus item '{syllabus_name}' has been deleted.")
 
-    # Function to update a grade in the CSV file
+    # Function to update a grade
     def update_grade(semester, course, syllabus_name, grade):
         updated_rows = []
         try:
@@ -352,55 +385,94 @@ def open_course(semester_name, course_name):
 
         messagebox.showinfo("Updated", f"Grade for '{syllabus_name}' updated to {grade}.")
 
-    # Function to display a syllabus item in the UI
-    def add_syllabus_item_to_display(frame, semester, course, syllabus_name, syllabus_weight, syllabus_mark):
+    # Function to add syllabus item to the display
+    def add_syllabus_item_to_display(frame, semester, course, syllabus_name, syllabus_weight, syllabus_grade):
         item_frame = tk.Frame(frame, padx=5, pady=5)
         item_frame.pack(fill=tk.X, anchor="w")
 
+        # Syllabus details
         tk.Label(item_frame, text=f"Syllabus: {syllabus_name}", font=("Arial", 12)).pack(side=tk.LEFT, padx=5)
-        tk.Label(item_frame, text=f"Weight: {syllabus_weight}", font=("Arial", 12)).pack(side=tk.LEFT, padx=5)
+        tk.Label(item_frame, text=f"Weight: {syllabus_weight}%", font=("Arial", 12)).pack(side=tk.LEFT, padx=5)
 
+        # Grade input
         grade_entry = tk.Entry(item_frame, font=("Arial", 12), width=8)
-        grade_entry.insert(0, syllabus_mark)  # Pre-fill with existing grade if any
+        grade_entry.insert(0, syllabus_grade or "")  # Pre-fill with existing grade if available
         grade_entry.pack(side=tk.RIGHT, padx=5)
 
-        update_button = tk.Button(
-            item_frame, text="Save Grade", font=("Arial", 10), command=lambda: update_grade(semester, course, syllabus_name, grade_entry.get())
+        # Save grade button
+        save_button = tk.Button(
+            item_frame, text="Save Grade", font=("Arial", 10),
+            command=lambda: update_grade(semester, course, syllabus_name, grade_entry.get())
         )
-        update_button.pack(side=tk.RIGHT, padx=5)
+        save_button.pack(side=tk.RIGHT, padx=5)
 
+        # Delete syllabus item button
         delete_button = tk.Button(
             item_frame, text="X", font=("Arial", 10), fg="red",
             command=lambda: delete_syllabus_item(semester, course, syllabus_name, item_frame)
         )
         delete_button.pack(side=tk.RIGHT, padx=5)
 
-    # Load existing syllabus items from the CSV
+    # Function to save a new syllabus item
+    def save_syllabus_item():
+        syllabus_name = syllabus_item_name_var.get().strip()
+        syllabus_weight = syllabus_item_weight_var.get().strip()
+
+        if not syllabus_name or not syllabus_weight.isdigit():
+            messagebox.showerror("Input Error", "Please provide valid inputs.")
+            return
+
+        try:
+            with open(GRADES_FILE, mode="a", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerow([semester_name, course_name, syllabus_name, syllabus_weight, ""])  # No grade initially
+        except Exception as e:
+            messagebox.showerror("File Error", f"Error saving syllabus item: {e}")
+            return
+
+        add_syllabus_item_to_display(
+            syllabus_list_frame, semester_name, course_name, syllabus_name, syllabus_weight, ""
+        )
+        syllabus_item_name_var.set("")
+        syllabus_item_weight_var.set("")
+        calculate_total_weight()  # Recalculate total weight after adding a new item
+
+    # Load existing syllabus items and calculate total weight
     def load_syllabus_items():
         try:
             with open(GRADES_FILE, mode="r") as file:
                 reader = csv.reader(file)
                 for row in reader:
-                    if row and row[0] == semester_name and row[1] == course_name:
+                    if row[0] == semester_name and row[1] == course_name:
                         add_syllabus_item_to_display(syllabus_list_frame, row[0], row[1], row[2], row[3], row[4])
         except FileNotFoundError:
             pass
+        calculate_total_weight()  # Update total weight on load
 
-    # Create the left and right columns
+    # Left column: Display current grade and total weight
     left_column = tk.Frame(course_window, padx=10, pady=10, width=300)
     left_column.pack(side=tk.LEFT, fill=tk.Y)
 
-    right_column = tk.Frame(course_window, padx=10, pady=10)
-    right_column.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+    tk.Label(left_column, text=f"Course: {course_name}", font=("Arial", 14)).pack(pady=5, anchor="center")
 
-    # Left column: Input fields for new syllabus items
+    # Current Grade
+    tk.Label(left_column, text="Current Grade:", font=("Arial", 12)).pack(anchor="w")
+    current_grade_label = tk.Label(left_column, textvariable=current_grade_var, font=("Arial", 12))
+    current_grade_label.pack(pady=5, anchor="w")
+
+    # Total Weight
+    tk.Label(left_column, text="Total Weight:", font=("Arial", 12)).pack(anchor="w")
+    total_weight_label = tk.Label(left_column, textvariable=total_weight_var, font=("Arial", 12))
+    total_weight_label.pack(pady=5, anchor="w")
+
+    # Syllabus Item Inputs
     tk.Label(left_column, text="Add Syllabus Item", font=("Arial", 14)).pack(pady=10, anchor="center")
 
     tk.Label(left_column, text="Syllabus Item Name:", font=("Arial", 12)).pack(anchor="w")
     syllabus_item_name_entry = tk.Entry(left_column, textvariable=syllabus_item_name_var, font=("Arial", 12))
     syllabus_item_name_entry.pack(pady=5, anchor="w", fill=tk.X)
 
-    tk.Label(left_column, text="Weight:", font=("Arial", 12)).pack(anchor="w")
+    tk.Label(left_column, text="Weight (%):", font=("Arial", 12)).pack(anchor="w")
     syllabus_item_weight_entry = tk.Entry(left_column, textvariable=syllabus_item_weight_var, font=("Arial", 12))
     syllabus_item_weight_entry.pack(pady=5, anchor="w", fill=tk.X)
 
@@ -410,11 +482,15 @@ def open_course(semester_name, course_name):
     save_syllabus_button.pack(pady=10)
 
     # Right column: Display syllabus items
+    right_column = tk.Frame(course_window, padx=10, pady=10)
+    right_column.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
     tk.Label(right_column, text=f"{course_name} - Syllabus Items", font=("Arial", 14)).pack(anchor="w", pady=5)
     syllabus_list_frame = tk.Frame(right_column)
     syllabus_list_frame.pack(fill=tk.BOTH, expand=True)
 
     load_syllabus_items()
+
 
 
 # Main application window

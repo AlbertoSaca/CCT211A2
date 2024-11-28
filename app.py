@@ -132,11 +132,12 @@ def save_course(semester_name, course_name_var, course_credit_var, course_list_f
         messagebox.showerror("File Error", f"Error saving course: {e}")
         return
 
-    add_course_to_display(course_list_frame, semester_name, course_name, course_credit)
+    add_course_to_display(course_list_frame, semester_name, course_name, course_credit, total_credits)
     update_total_credits(total_credits, float(course_credit))
     course_name_var.set("")
     course_credit_var.set("0.5")
     messagebox.showinfo("Success", f"Course '{course_name}' added to {semester_name}!")
+
 
 # Function to load courses for a semester
 def load_courses(semester_name, course_list_frame, total_credits):
@@ -146,14 +147,15 @@ def load_courses(semester_name, course_list_frame, total_credits):
             reader = csv.reader(file)
             for row in reader:
                 if row and row[0] == semester_name:
-                    add_course_to_display(course_list_frame, row[0], row[1], row[2])
+                    add_course_to_display(course_list_frame, row[0], row[1], row[2], total_credits)
                     total += float(row[2])
     except FileNotFoundError:
         pass
     total_credits.set(f"{total:.1f}")
 
+
 # Function to add a course to the UI
-def add_course_to_display(course_list_frame, semester_name, course_name, course_credit):
+def add_course_to_display(course_list_frame, semester_name, course_name, course_credit, total_credits):
     frame = tk.Frame(course_list_frame, padx=5, pady=5)
     frame.pack(fill=tk.X, anchor="w")
 
@@ -161,9 +163,11 @@ def add_course_to_display(course_list_frame, semester_name, course_name, course_
     course_label.pack(side=tk.LEFT)
 
     delete_button = tk.Button(
-        frame, text="X", font=("Arial", 10), fg="red", command=lambda: delete_course(semester_name, course_name, course_credit, frame, total_credits)
+        frame, text="X", font=("Arial", 10), fg="red",
+        command=lambda: delete_course(semester_name, course_name, course_credit, frame, total_credits)
     )
     delete_button.pack(side=tk.RIGHT)
+
 
     open_button = tk.Button(
         frame, text="Open", font=("Arial", 10), command=lambda: open_course(semester_name, course_name)
@@ -178,22 +182,39 @@ def update_total_credits(total_credits, credit_change):
 
 # Function to delete a course
 def delete_course(semester_name, course_name, course_credit, frame, total_credits):
-    updated_rows = []
+    # Update courses.csv by removing the course
+    updated_courses = []
     try:
         with open(COURSES_FILE, mode="r") as file:
             reader = csv.reader(file)
-            updated_rows = [row for row in reader if not (row and row[0] == semester_name and row[1] == course_name)]
+            updated_courses = [row for row in reader if not (row and row[0] == semester_name and row[1] == course_name)]
     except FileNotFoundError:
         messagebox.showerror("File Error", "Courses file not found.")
         return
 
     with open(COURSES_FILE, mode="w", newline="") as file:
         writer = csv.writer(file)
-        writer.writerows(updated_rows)
+        writer.writerows(updated_courses)
 
+    # Update grades.csv by removing syllabus items related to the course
+    updated_grades = []
+    try:
+        with open(GRADES_FILE, mode="r") as file:
+            reader = csv.reader(file)
+            updated_grades = [row for row in reader if not (row and row[0] == semester_name and row[1] == course_name)]
+    except FileNotFoundError:
+        messagebox.showerror("File Error", "Grades file not found.")
+        return
+
+    with open(GRADES_FILE, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerows(updated_grades)
+
+    # Update UI
     frame.destroy()
     update_total_credits(total_credits, -float(course_credit))
-    messagebox.showinfo("Deleted", f"Course '{course_name}' has been deleted.")
+    messagebox.showinfo("Deleted", f"Course '{course_name}' and its syllabus items have been deleted.")
+
 
 # Function to open a course (stub for further details)
 def open_course(semester_name, course_name):
@@ -201,31 +222,50 @@ def open_course(semester_name, course_name):
 
 # Function to delete a semester
 def delete_semester(semester_name, frame):
-    updated_rows = []
+    # Remove the semester from the semesters.csv file
+    updated_semesters = []
     try:
         with open(SEMESTER_FILE, mode="r") as file:
             reader = csv.reader(file)
-            updated_rows = [row for row in reader if row and row[0] != semester_name]
+            updated_semesters = [row for row in reader if row and row[0] != semester_name]
     except FileNotFoundError:
-        messagebox.showerror("File Error", "CSV file not found.")
+        messagebox.showerror("File Error", "Semesters file not found.")
         return
 
     with open(SEMESTER_FILE, mode="w", newline="") as file:
         writer = csv.writer(file)
-        writer.writerows(updated_rows)
+        writer.writerows(updated_semesters)
 
+    # Remove all courses related to the semester from courses.csv
+    updated_courses = []
     try:
         with open(COURSES_FILE, mode="r") as file:
             reader = csv.reader(file)
-            updated_courses = [row for row in reader if row[0] != semester_name]
-        with open(COURSES_FILE, mode="w", newline="") as file:
-            writer = csv.writer(file)
-            writer.writerows(updated_courses)
+            updated_courses = [row for row in reader if row and row[0] != semester_name]
     except FileNotFoundError:
         pass
 
+    with open(COURSES_FILE, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerows(updated_courses)
+
+    # Remove all grades related to the semester from grades.csv
+    updated_grades = []
+    try:
+        with open(GRADES_FILE, mode="r") as file:
+            reader = csv.reader(file)
+            updated_grades = [row for row in reader if row and row[0] != semester_name]
+    except FileNotFoundError:
+        pass
+
+    with open(GRADES_FILE, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerows(updated_grades)
+
+    # Update the UI
     frame.destroy()
-    messagebox.showinfo("Deleted", f"Semester '{semester_name}' and its courses have been deleted.")
+    messagebox.showinfo("Deleted", f"Semester '{semester_name}', its courses, and syllabus items have been deleted.")
+
 
 # Load semesters on startup
 def load_semesters():
