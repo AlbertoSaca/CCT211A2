@@ -1,5 +1,8 @@
-semester, course, syllabus_item, weight, grade
-Winter 2020,cct222,exam1,20,85
-Winter 2020,cct222,exam2,30,98
-Winter 2020,cct111,exam1,20,70
-Winter 2020,cct111,exam2,50,89
+semester, course, syllabus, weight, grade
+Fall 2021,cct222,a1,20,35
+Fall 2021,cct222,a2,30,69
+Fall 2021,cct222,a3,50,89
+Fall 2021,cct333,exam1,20,85
+Fall 2021,cct333,exam2,30,90
+Summer 2020,cct333,a2,40,89
+Summer 2020,cct333,a3,30,60

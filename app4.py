@@ -1,13 +1,31 @@
 import tkinter as tk
 from tkinter import ttk
-import csv
+import csv  
 from tkinter import messagebox
 import pandas as pd
 
-# File paths
+# File paths~
 SEMESTER_FILE = "semesters.csv"
 COURSES_FILE = "courses.csv"
 GRADES_FILE = "grades.csv"
+
+def normalize_columns(df):
+    df.columns = df.columns.str.strip().str.lower()  # Remove spaces and convert to lowercase
+    return df
+
+
+def initialize_files():
+    for file, columns in [(SEMESTER_FILE, ['semester', ' cgpa']),
+                          (COURSES_FILE, ['semester', ' course', ' credit', ' gpa']),
+                          (GRADES_FILE, ['semester', ' course', ' syllabus', ' weight', ' grade'])]:
+        try:
+            df = pd.read_csv(file)
+            df = normalize_columns(df)
+            df.to_csv(file, index=False)  # Save with normalized columns
+        except FileNotFoundError:
+            pd.DataFrame(columns=columns).to_csv(file, index=False)
+            print(f"Initialized {file} with columns: {columns}")  # Debug message
+
 
 # Function to save a semester
 def save_semester():
@@ -60,64 +78,71 @@ def add_semester_to_display(semester_name):
     )
     open_button.pack(side=tk.RIGHT, padx=5)
 
-
-def calculate_semester_gpa(semester_name):
-    try:
-        # Load courses data for all semesters
-        course_data = pd.read_csv(COURSES_FILE)
-        
-        # Filter for the selected semester
-        semester_courses = course_data[course_data['Semester'] == semester_name]
-
-        if semester_courses.empty:
-            messagebox.showinfo("No Data", f"No courses found for semester '{semester_name}'.")
-            return
-
-        # Calculate GPA for each course
-        semester_courses['GPA'] = semester_courses['Marks'].apply(get_gpa)
-
-        # Calculate weighted GPA for the semester
-        total_credits = semester_courses['Credits'].sum()
-        weighted_gpa_sum = (semester_courses['GPA'] * semester_courses['Credits']).sum()
-        semester_gpa = weighted_gpa_sum / total_credits if total_credits > 0 else 0
-
-        # Display the GPA result
-        messagebox.showinfo("Semester GPA", f"GPA for {semester_name}: {semester_gpa:.2f}")
-    except FileNotFoundError:
-        messagebox.showerror("File Error", f"The file '{COURSES_FILE}' does not exist.")
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to calculate Semester GPA: {e}")
-
-
+# GPA Mapping Function
+def get_gpa(mark):
+    grading_scale = pd.DataFrame({
+        'Min': [90, 85, 80, 75, 70, 65, 60, 50, 0],
+        'Max': [100, 89, 84, 79, 74, 69, 64, 59, 49],
+        'Point': [4.0, 3.9, 3.7, 3.3, 3.0, 2.7, 2.3, 1.7, 0.0]
+    })
+    grade_row = grading_scale[(grading_scale['Min'] <= mark) & (grading_scale['Max'] >= mark)]
+    return grade_row.iloc[0]['Point'] if not grade_row.empty else 0.0
 
 def calculate_course_gpa(semester_name, course_name):
-    try:
-        # Load grades data for all courses
-        grades_data = pd.read_csv(GRADES_FILE)
+    grades = pd.read_csv(GRADES_FILE)
+    grades = normalize_columns(grades)  # Normalize columns
+    print("Grades DataFrame Columns:", grades.columns)  # Debug
 
-        # Filter for the specific course and semester
-        course_items = grades_data[
-            (grades_data['Semester'] == semester_name) & (grades_data['Course'] == course_name)
-        ]
+    course_grades = grades[(grades['semester'] == semester_name) & (grades['course'] == course_name)]
 
-        if course_items.empty:
-            messagebox.showinfo("No Data", f"No syllabus items found for course '{course_name}'.")
-            return
+    if course_grades.empty:
+        messagebox.showinfo("No Data", f"No syllabus items found for course '{course_name}'.")
+        return
 
-        # Calculate weighted marks for each syllabus item
-        course_items['Weighted Marks'] = course_items['Marks'] * course_items['Weight'] / 100
-        total_weighted_marks = course_items['Weighted Marks'].sum()
+    total_weight = course_grades['weight'].sum()
+    if total_weight == 0:
+        messagebox.showinfo("No Data", f"Total weight for course '{course_name}' is zero.")
+        return
 
-        # Convert total weighted marks to GPA
-        course_gpa = get_gpa(total_weighted_marks)
+    weighted_sum = (course_grades['weight'] * course_grades['grade']).sum() / 100
+    weighted_average = (weighted_sum / total_weight) * 100
+    course_gpa = get_gpa(weighted_average)
 
-        # Display the GPA result
-        messagebox.showinfo("Course GPA", f"GPA for {course_name}: {course_gpa:.2f}")
-    except FileNotFoundError:
-        messagebox.showerror("File Error", f"The file '{GRADES_FILE}' does not exist.")
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to calculate Course GPA: {e}")
+    # Update Course GPA in CSV
+    courses = pd.read_csv(COURSES_FILE)
+    courses = normalize_columns(courses)  # Normalize columns
+    courses.loc[(courses['semester'] == semester_name) & (courses['course'] == course_name), 'gpa'] = course_gpa
+    courses.to_csv(COURSES_FILE, index=False)
 
+    messagebox.showinfo("Course GPA", f"GPA for '{course_name}': {course_gpa:.2f}")
+
+
+def calculate_semester_gpa(semester_name):
+    courses = pd.read_csv(COURSES_FILE)
+    courses = normalize_columns(courses)  # Normalize columns
+    print("Courses DataFrame Columns:", courses.columns)  # Debug
+
+    semester_courses = courses[courses['semester'] == semester_name]
+
+    if semester_courses.empty:
+        messagebox.showinfo("No Data", f"No courses found for semester '{semester_name}'.")
+        return
+
+    total_credits = semester_courses['credit'].sum()
+    if total_credits == 0:
+        messagebox.showinfo("No Data", f"Total credits for semester '{semester_name}' are zero.")
+        return
+
+    weighted_gpa_sum = (semester_courses['credit'] * semester_courses['gpa']).sum()
+    semester_gpa = weighted_gpa_sum / total_credits
+
+    # Update Semester GPA in CSV
+    semesters = pd.read_csv(SEMESTER_FILE)
+    semesters = normalize_columns(semesters)  # Normalize columns
+    semesters.loc[semesters['semester'] == semester_name, 'cgpa'] = semester_gpa
+    semesters.to_csv(SEMESTER_FILE, index=False)
+
+    messagebox.showinfo("Semester GPA", f"GPA for '{semester_name}': {semester_gpa:.2f}")
 
 
 # Function to open a semester window
@@ -558,17 +583,5 @@ create_button.pack(pady=10)
 
 tk.Label(output_frame, text="Semesters", font=("Arial", 14)).pack(anchor="w", pady=5)
 load_semesters()
-
-
-    # Map marks to GPA based on grading scale
-def get_gpa(mark):
-    grading_scale = pd.DataFrame({
-        'Min': [90, 85, 80, 75, 70, 65, 60, 50, 0],
-        'Max': [100, 89, 84, 79, 74, 69, 64, 59, 49],
-        'Point': [4.0, 3.9, 3.7, 3.3, 3.0, 2.7, 2.3, 1.7, 0.0]
-    })
-    grade_row = grading_scale[(grading_scale['Min'] <= mark) & (grading_scale['Max'] >= mark)]
-    return grade_row.iloc[0]['Point'] if not grade_row.empty else 0.0
-
 
 root.mainloop()     

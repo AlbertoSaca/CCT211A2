@@ -1,3 +1,5 @@
-semester, course, credit, gpa
-Winter 2020,cct111,0.5,
-Winter 2020,cct222,0.5,
+semester,course,credit,gpa
+Fall 2021,cct222,0.5,3.0
+Fall 2021,cct333,1.0,3.9
+Summer 2020,cct333,1.0,3.3
+Summer 2020,cct333,0.5,3.3
