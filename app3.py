@@ -60,64 +60,148 @@ def add_semester_to_display(semester_name):
     )
     open_button.pack(side=tk.RIGHT, padx=5)
 
-
-def calculate_semester_gpa(semester_name):
-    try:
-        # Load courses data for all semesters
-        course_data = pd.read_csv(COURSES_FILE)
-        
-        # Filter for the selected semester
-        semester_courses = course_data[course_data['Semester'] == semester_name]
-
-        if semester_courses.empty:
-            messagebox.showinfo("No Data", f"No courses found for semester '{semester_name}'.")
-            return
-
-        # Calculate GPA for each course
-        semester_courses['GPA'] = semester_courses['Marks'].apply(get_gpa)
-
-        # Calculate weighted GPA for the semester
-        total_credits = semester_courses['Credits'].sum()
-        weighted_gpa_sum = (semester_courses['GPA'] * semester_courses['Credits']).sum()
-        semester_gpa = weighted_gpa_sum / total_credits if total_credits > 0 else 0
-
-        # Display the GPA result
-        messagebox.showinfo("Semester GPA", f"GPA for {semester_name}: {semester_gpa:.2f}")
-    except FileNotFoundError:
-        messagebox.showerror("File Error", f"The file '{COURSES_FILE}' does not exist.")
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to calculate Semester GPA: {e}")
-
+# Function to map marks to GPA
+def get_gpa(mark):
+    grading_scale = pd.DataFrame({
+        'Min': [90, 85, 80, 75, 70, 65, 60, 50, 0],
+        'Max': [100, 89, 84, 79, 74, 69, 64, 59, 49],
+        'Point': [4.0, 3.9, 3.7, 3.3, 3.0, 2.7, 2.3, 1.7, 0.0]
+    })
+    grade_row = grading_scale[(grading_scale['Min'] <= mark) & (grading_scale['Max'] >= mark)]
+    return grade_row.iloc[0]['Point'] if not grade_row.empty else 0.0
 
 
 def calculate_course_gpa(semester_name, course_name):
     try:
-        # Load grades data for all courses
+        # Load grades data
         grades_data = pd.read_csv(GRADES_FILE)
 
-        # Filter for the specific course and semester
-        course_items = grades_data[
-            (grades_data['Semester'] == semester_name) & (grades_data['Course'] == course_name)
+        # Filter relevant rows for the course
+        course_rows = grades_data[
+            (grades_data['semester'] == semester_name) & (grades_data['course'] == course_name)
         ]
 
-        if course_items.empty:
+        if course_rows.empty:
             messagebox.showinfo("No Data", f"No syllabus items found for course '{course_name}'.")
-            return
+            return None  # Return None if no data found
 
-        # Calculate weighted marks for each syllabus item
-        course_items['Weighted Marks'] = course_items['Marks'] * course_items['Weight'] / 100
-        total_weighted_marks = course_items['Weighted Marks'].sum()
+        # Initialize totals
+        total_weight = 0
+        weighted_sum = 0
 
-        # Convert total weighted marks to GPA
-        course_gpa = get_gpa(total_weighted_marks)
+        # Process each syllabus item
+        for _, row in course_rows.iterrows():
+            try:
+                weight = float(row['weight'])
+                grade = float(row['grade'])
+                total_weight += weight
+                weighted_sum += (weight * grade / 100)
+            except ValueError:
+                continue  # Skip invalid rows
 
-        # Display the GPA result
-        messagebox.showinfo("Course GPA", f"GPA for {course_name}: {course_gpa:.2f}")
+        if total_weight == 0:
+            messagebox.showinfo("No Data", f"Total weight for course '{course_name}' is zero.")
+            return None
+
+        # Calculate the weighted average and course GPA
+        weighted_average = (weighted_sum / total_weight) * 100
+        course_gpa = get_gpa(weighted_average)
+        return course_gpa  # Return GPA for further use
+
     except FileNotFoundError:
-        messagebox.showerror("File Error", f"The file '{GRADES_FILE}' does not exist.")
+        messagebox.showerror("File Error", f"File '{GRADES_FILE}' not found.")
     except Exception as e:
-        messagebox.showerror("Error", f"Failed to calculate Course GPA: {e}")
+        messagebox.showerror("Error", f"Failed to calculate Course GPA for '{course_name}': {e}")
+    return None  # Return None on failure
 
+def calculate_course_gpa(semester_name, course_name):
+    try:
+        # Load grades data
+        grades_data = pd.read_csv(GRADES_FILE)
+
+        # Filter relevant rows for the course
+        course_rows = grades_data[
+            (grades_data['semester'] == semester_name) & (grades_data['course'] == course_name)
+        ]
+
+        if course_rows.empty:
+            messagebox.showinfo("No Data", f"No syllabus items found for course '{course_name}'.")
+            return None  # Return None if no data found
+
+        # Initialize totals
+        total_weight = 0
+        weighted_sum = 0
+
+        # Process each syllabus item
+        for _, row in course_rows.iterrows():
+            try:
+                weight = float(row['weight'])
+                grade = float(row['grade'])
+                total_weight += weight
+                weighted_sum += (weight * grade / 100)
+            except ValueError:
+                continue  # Skip invalid rows
+
+        if total_weight == 0:
+            messagebox.showinfo("No Data", f"Total weight for course '{course_name}' is zero.")
+            return None
+
+        # Calculate the weighted average and course GPA
+        weighted_average = (weighted_sum / total_weight) * 100
+        course_gpa = get_gpa(weighted_average)
+        return course_gpa  # Return GPA for further use
+
+    except FileNotFoundError:
+        messagebox.showerror("File Error", f"File '{GRADES_FILE}' not found.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to calculate Course GPA for '{course_name}': {e}")
+    return None  # Return None on failure
+
+def calculate_semester_gpa(semester_name):
+    try:
+        # Load courses data
+        courses_data = pd.read_csv(COURSES_FILE)
+
+        # Filter relevant rows for the semester
+        semester_rows = courses_data[courses_data['semester'] == semester_name]
+
+        if semester_rows.empty:
+            messagebox.showinfo("No Data", f"No courses found for semester '{semester_name}'.")
+            return None  # Return None if no data found
+
+        # Initialize totals
+        total_credits = 0
+        weighted_gpa_sum = 0
+
+        # Process each course
+        for _, row in semester_rows.iterrows():
+            try:
+                course_name = row['course']
+                credit = float(row['credit'])
+
+                # Calculate the GPA for the course
+                course_gpa = calculate_course_gpa(semester_name, course_name)
+
+                if course_gpa is not None:
+                    total_credits += credit
+                    weighted_gpa_sum += (course_gpa * credit)
+            except ValueError:
+                continue  # Skip invalid rows
+
+        if total_credits == 0:
+            messagebox.showinfo("No Data", f"Total credits for semester '{semester_name}' are zero.")
+            return None
+
+        # Calculate the semester GPA
+        semester_gpa = weighted_gpa_sum / total_credits
+        messagebox.showinfo("Semester GPA", f"GPA for '{semester_name}': {semester_gpa:.2f}")
+        return semester_gpa  # Return GPA for further use
+
+    except FileNotFoundError:
+        messagebox.showerror("File Error", f"File '{COURSES_FILE}' not found.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to calculate Semester GPA: {e}")
+    return None  # Return None on failure
 
 
 # Function to open a semester window
@@ -558,17 +642,6 @@ create_button.pack(pady=10)
 
 tk.Label(output_frame, text="Semesters", font=("Arial", 14)).pack(anchor="w", pady=5)
 load_semesters()
-
-
-    # Map marks to GPA based on grading scale
-def get_gpa(mark):
-    grading_scale = pd.DataFrame({
-        'Min': [90, 85, 80, 75, 70, 65, 60, 50, 0],
-        'Max': [100, 89, 84, 79, 74, 69, 64, 59, 49],
-        'Point': [4.0, 3.9, 3.7, 3.3, 3.0, 2.7, 2.3, 1.7, 0.0]
-    })
-    grade_row = grading_scale[(grading_scale['Min'] <= mark) & (grading_scale['Max'] >= mark)]
-    return grade_row.iloc[0]['Point'] if not grade_row.empty else 0.0
 
 
 root.mainloop()     
